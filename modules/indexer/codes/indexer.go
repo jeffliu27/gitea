@@ -50,6 +50,12 @@ type Indexer interface {
 	Search(repoIDs []int64, keyword string, page, pageSize int) (*SearchResult, error)
 }
 
+type repoIndexerOperation struct {
+	repo     *Repository
+	deleted  bool
+	watchers []chan<- error
+}
+
 var (
 	// codesIndexerQueue queue of issue ids to be updated
 	codesIndexerQueue Queue
@@ -302,18 +308,62 @@ func nonGenesisChanges(repo *models.Repository, revision string) (*repoChanges, 
 	return &changes, err
 }
 
+// // DeleteRepoFromIndexer remove all of a repository's entries from the indexer
+// func DeleteRepoFromIndexer(repo *models.Repository) {
+// 	codesIndexerQueue.Push(&IndexerData{
+// 		RepoID:   repo.ID,
+// 		IsDelete: true,
+// 	})
+// }
+
+// // UpdateRepoIndexer update a repository's entries in the indexer
+// func UpdateRepoIndexer(repo *models.Repository) {
+// 	codesIndexerQueue.Push(&IndexerData{
+// 		RepoID:   repo.ID,
+// 		IsDelete: false,
+// 	})
+// }
+
+// Currently not being used?
+func processRepoIndexerOperationQueue() {
+	for {
+		op := <-repoIndexerOperationQueue
+		var err error
+		if op.deleted {
+			if err = indexer.DeleteRepoFromIndexer(op.repo.ID); err != nil {
+				log.Error("DeleteRepoFromIndexer: %v", err)
+			}
+		} else {
+			if err = updateRepoIndexer(op.repo); err != nil {
+				log.Error("updateRepoIndexer: %v", err)
+			}
+		}
+		for _, watcher := range op.watchers {
+			watcher <- err
+		}
+	}
+}
+
+func addOperationToQueue(op repoIndexerOperation) {
+	if !setting.Indexer.RepoIndexerEnabled {
+		return
+	}
+	select {
+	case repoIndexerOperationQueue <- op:
+		break
+	default:
+		go func() {
+			repoIndexerOperationQueue <- op
+		}()
+	}
+}
+
 // DeleteRepoFromIndexer remove all of a repository's entries from the indexer
-func DeleteRepoFromIndexer(repo *models.Repository) {
-	codesIndexerQueue.Push(&IndexerData{
-		RepoID:   repo.ID,
-		IsDelete: true,
-	})
+func DeleteRepoFromIndexer(repo *Repository, watchers ...chan<- error) {
+	addOperationToQueue(repoIndexerOperation{repo: repo, deleted: true, watchers: watchers})
 }
 
 // UpdateRepoIndexer update a repository's entries in the indexer
-func UpdateRepoIndexer(repo *models.Repository) {
-	codesIndexerQueue.Push(&IndexerData{
-		RepoID:   repo.ID,
-		IsDelete: false,
-	})
+func UpdateRepoIndexer(repo *Repository, watchers ...chan<- error) {
+	addOperationToQueue(repoIndexerOperation{repo: repo, deleted: false, watchers: watchers})
 }
