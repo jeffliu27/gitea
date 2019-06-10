@@ -26,18 +26,18 @@ func PushUpdate(ctx *macaron.Context) {
 		return
 	}
 
+	branch := strings.TrimPrefix(opt.RefFullName, git.BranchPrefix)
+	if len(branch) == 0 || opt.PusherID <= 0 {
+		ctx.Error(404)
+		log.Trace("PushUpdate: branch or secret is empty, or pusher ID is not valid")
+		return
+	}
+
 	repo, err := models.GetRepositoryByOwnerAndName(opt.RepoUserName, opt.RepoName)
 	if err != nil {
 		ctx.JSON(500, map[string]interface{}{
 			"err": err.Error(),
 		})
-		return
-	}
-
-	branch := strings.TrimPrefix(opt.RefFullName, git.BranchPrefix)
-	if len(branch) == 0 || opt.PusherID <= 0 {
-		ctx.Error(404)
-		log.Trace("PushUpdate: branch or secret is empty, or pusher ID is not valid")
 		return
 	}
 
