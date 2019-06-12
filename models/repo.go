@@ -2391,9 +2391,10 @@ func ForkRepository(doer, u *User, oldRepo *Repository, name, desc string) (_ *R
 		return nil, err
 	}
 	if forkedRepo != nil {
-		return nil, ErrRepoAlreadyExist{
-			Uname: u.Name,
-			Name:  forkedRepo.Name,
+		return nil, ErrForkAlreadyExist{
+			Uname:    u.Name,
+			RepoName: oldRepo.FullName(),
+			ForkName: forkedRepo.FullName(),
 		}
 	}
 
