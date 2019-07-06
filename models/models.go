@@ -393,3 +393,9 @@ func FindByMaxID(maxID int64, limit int, results interface{}) error {
 		Limit(limit).
 		Find(results)
 }
+
+// MaxBatchInsertSize returns the table's max batch insert size
+func MaxBatchInsertSize(bean interface{}) int {
+	t := x.TableInfo(bean)
+	return 999 / len(t.ColumnsSeq())
+}
